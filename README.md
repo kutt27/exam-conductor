@@ -4,7 +4,7 @@ An enterprise-ready, interview-style examination software built with **FastAPI**
 
 ---
 
-## 🌟 Key Features
+## Features
 
 1. **Near-Instant Groq Rubric Evaluation (~500 tokens/sec)**:
    - Plain-text interview document evaluation with structured Pydantic schema validation.
@@ -31,9 +31,7 @@ An enterprise-ready, interview-style examination software built with **FastAPI**
 6. **Admin Console**:
    - Account provisioning, role modification (`ADMIN`, `TEACHER`, `STUDENT`), and platform-wide statistics.
 
----
-
-## 🗄️ Supabase PostgreSQL Setup
+## Supabase PostgreSQL Setup
 
 1. Open your [Supabase Dashboard](https://supabase.com/dashboard) and create a new project.
 2. Navigate to the **SQL Editor** in Supabase and run the migration script located at:
@@ -41,9 +39,7 @@ An enterprise-ready, interview-style examination software built with **FastAPI**
 3. Copy your project connection string from **Project Settings > Database > Connection String (URI)**:
    - Format: `postgresql+asyncpg://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`
 
----
-
-## 🚀 Quick Start Guide
+## Guide
 
 ### 1. Backend Setup (FastAPI)
 
@@ -60,6 +56,8 @@ pip install -r requirements.txt
 # 3. Configure environment variables (.env)
 cp .env.example .env
 # Edit .env and set your DATABASE_URL and GROQ_API_KEY
+```
+```
 
 # 4. Start the FastAPI server
 uvicorn app.main:app --reload --port 8000

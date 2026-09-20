@@ -402,60 +402,31 @@ export default function TeacherDashboardPage() {
           <div className="lg:col-span-2 space-y-4">
             {selectedExam && (
               <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4 shadow-2xs">
-                {/* Header & Main Control Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3.5">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        Access Code:
-                      </span>
-                      <span className="text-xs font-mono font-bold bg-gray-900 text-white px-2 py-0.5 rounded">
-                        {selectedExam.access_code}
-                      </span>
-                      {selectedExam.is_active !== false ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-300 px-2 py-0.5 rounded">
-                          Closed
-                        </span>
-                      )}
-                      <span className="text-[11px] text-gray-400">
-                        • {selectedExam.duration_minutes} mins ({selectedExam.timer_mode || "LOCAL"} Timer)
-                      </span>
-                    </div>
-                    <h3 className="text-sm font-bold text-gray-900 mt-1">
-                      {selectedExam.title}
-                    </h3>
-                  </div>
-
+                {/* Header Metadata */}
+                <div className="border-b border-gray-100 pb-3">
                   <div className="flex items-center space-x-2">
-                    {/* Batch Evaluation Button */}
-                    {batchStatus && (
-                      <button
-                        onClick={handleStartBatchEvaluation}
-                        disabled={triggeringBatch || batchStatus.pending === 0 || batchStatus.is_evaluating}
-                        className="bg-gray-900 hover:bg-black text-white px-3.5 py-1.5 rounded text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5"
-                      >
-                        <span>
-                          {batchStatus.is_evaluating
-                            ? "Evaluating Batch..."
-                            : triggeringBatch
-                            ? "Starting..."
-                            : `Start AI Evaluation (${batchStatus.pending})`}
-                        </span>
-                      </button>
+                    <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Access Code:
+                    </span>
+                    <span className="text-xs font-mono font-bold bg-gray-900 text-white px-2 py-0.5 rounded">
+                      {selectedExam.access_code}
+                    </span>
+                    {selectedExam.is_active !== false ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-300 px-2 py-0.5 rounded">
+                        Closed
+                      </span>
                     )}
-
-                    <button
-                      onClick={() => selectedExamId && loadSubmissionsAndStatus(selectedExamId)}
-                      className="px-2.5 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded text-xs transition"
-                      title="Refresh status now"
-                    >
-                      Refresh
-                    </button>
+                    <span className="text-[11px] text-gray-400">
+                      • {selectedExam.duration_minutes} mins ({selectedExam.timer_mode || "LOCAL"} Timer)
+                    </span>
                   </div>
+                  <h3 className="text-sm font-bold text-gray-900 mt-1">
+                    {selectedExam.title}
+                  </h3>
                 </div>
 
                 {/* Live Polling Telemetry Feed Indicator */}
@@ -582,6 +553,41 @@ export default function TeacherDashboardPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Single Line Action Controls below Batch Progress */}
+                <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+                  {batchStatus && (
+                    <button
+                      onClick={handleStartBatchEvaluation}
+                      disabled={triggeringBatch || batchStatus.pending === 0 || batchStatus.is_evaluating}
+                      className="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 whitespace-nowrap shadow-2xs"
+                    >
+                      <span>
+                        {batchStatus.is_evaluating
+                          ? "Evaluating Batch..."
+                          : triggeringBatch
+                          ? "Starting..."
+                          : `Start AI Evaluation (${batchStatus.pending})`}
+                      </span>
+                    </button>
+                  )}
+
+                  <Link
+                    href={`/teacher/exam/new?edit=${selectedExamId}`}
+                    className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-800 bg-white rounded text-xs font-semibold transition flex items-center justify-center whitespace-nowrap shadow-2xs"
+                    title="Edit assessment details, questions, and marks"
+                  >
+                    Edit Exam
+                  </Link>
+
+                  <button
+                    onClick={() => selectedExamId && loadSubmissionsAndStatus(selectedExamId)}
+                    className="px-3.5 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 bg-white rounded text-xs font-semibold transition flex items-center justify-center whitespace-nowrap shadow-2xs"
+                    title="Refresh status now"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
             )}
 

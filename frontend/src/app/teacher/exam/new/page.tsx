@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
 
 interface QuestionDraft {
+  id?: string;
   type: "MCQ" | "CODE_DOC";
   prompt: string;
   max_marks: number;
@@ -14,8 +15,11 @@ interface QuestionDraft {
   rubric_notes: string;
 }
 
-export default function TeacherExamNewPage() {
+function ExamEditorForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editExamId = searchParams.get("edit");
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(45);
@@ -23,6 +27,7 @@ export default function TeacherExamNewPage() {
   const [timerMode, setTimerMode] = useState<"LOCAL" | "GLOBAL">("LOCAL");
   const [scheduledStartTime, setScheduledStartTime] = useState("");
   const [scheduledEndTime, setScheduledEndTime] = useState("");
+  const [isActive, setIsActive] = useState(true);
 
   const [questions, setQuestions] = useState<QuestionDraft[]>([
     {
@@ -42,7 +47,140 @@ export default function TeacherExamNewPage() {
       rubric_notes: "Award 10 marks for O(N) frequency map logic. Award 5 marks for clear complexity explanation.",
     },
   ]);
+
+  const [loading, setLoading] = useState(!!editExamId);
   const [saving, setSaving] = useState(false);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+  const [draftLastSaved, setDraftLastSaved] = useState<string | null>(null);
+
+  const draftStorageKey = editExamId ? `exam_draft_${editExamId}` : "teacher_exam_creation_draft";
+
+  // 1. Initial Load: Load either existing exam for editing OR restore local draft
+  useEffect(() => {
+    async function initExamData() {
+      if (editExamId) {
+        try {
+          const existing = await apiRequest<any>(`/exams/${editExamId}`);
+          setTitle(existing.title || "");
+          setDescription(existing.description || "");
+          setDurationMinutes(existing.duration_minutes || 45);
+          setAccessCode(existing.access_code || "");
+          setTimerMode(existing.timer_mode || "LOCAL");
+          setIsActive(existing.is_active !== false);
+          if (existing.scheduled_start_time) {
+            setScheduledStartTime(new Date(existing.scheduled_start_time).toISOString().slice(0, 16));
+          }
+          if (existing.scheduled_end_time) {
+            setScheduledEndTime(new Date(existing.scheduled_end_time).toISOString().slice(0, 16));
+          }
+          if (existing.questions && existing.questions.length > 0) {
+            setQuestions(
+              existing.questions.map((q: any) => ({
+                id: q.id,
+                type: q.type,
+                prompt: q.prompt,
+                max_marks: q.max_marks,
+                mcq_options: q.mcq_options || [],
+                mcq_correct_key: q.mcq_correct_key || "",
+                rubric_notes: q.rubric_notes || "",
+              }))
+            );
+          }
+        } catch (err: any) {
+          alert("Failed to load existing assessment: " + err.message);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // Check for local creation draft
+        if (typeof window !== "undefined") {
+          const savedDraftJson = localStorage.getItem("teacher_exam_creation_draft");
+          if (savedDraftJson) {
+            try {
+              const draft = JSON.parse(savedDraftJson);
+              if (draft.title) setTitle(draft.title);
+              if (draft.description) setDescription(draft.description);
+              if (draft.durationMinutes) setDurationMinutes(draft.durationMinutes);
+              if (draft.accessCode) setAccessCode(draft.accessCode);
+              if (draft.timerMode) setTimerMode(draft.timerMode);
+              if (draft.scheduledStartTime) setScheduledStartTime(draft.scheduledStartTime);
+              if (draft.scheduledEndTime) setScheduledEndTime(draft.scheduledEndTime);
+              if (draft.questions && draft.questions.length > 0) setQuestions(draft.questions);
+              setHasRestoredDraft(true);
+            } catch (e) {
+              console.error("Error restoring draft", e);
+            }
+          }
+        }
+        setLoading(false);
+      }
+    }
+
+    initExamData();
+  }, [editExamId]);
+
+  // 2. Auto-save draft changes to localStorage
+  useEffect(() => {
+    if (loading) return;
+
+    const timeout = setTimeout(() => {
+      if (typeof window !== "undefined") {
+        const draftData = {
+          title,
+          description,
+          durationMinutes,
+          accessCode,
+          timerMode,
+          scheduledStartTime,
+          scheduledEndTime,
+          isActive,
+          questions,
+          updatedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(draftStorageKey, JSON.stringify(draftData));
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+        setDraftLastSaved(timeStr);
+      }
+    }, 600);
+
+    return () => clearTimeout(timeout);
+  }, [title, description, durationMinutes, accessCode, timerMode, scheduledStartTime, scheduledEndTime, isActive, questions, loading, draftStorageKey]);
+
+  const clearDraft = () => {
+    if (window.confirm("Are you sure you want to discard this draft and reset to default template?")) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(draftStorageKey);
+      }
+      setTitle("");
+      setDescription("");
+      setDurationMinutes(45);
+      setAccessCode("EXAM-" + Math.random().toString(36).substring(2, 6).toUpperCase());
+      setTimerMode("LOCAL");
+      setScheduledStartTime("");
+      setScheduledEndTime("");
+      setQuestions([
+        {
+          type: "MCQ",
+          prompt: "What is the average time complexity of searching in a balanced Binary Search Tree?",
+          max_marks: 5,
+          mcq_options: ["A) O(1)", "B) O(log N)", "C) O(N)", "D) O(N log N)"],
+          mcq_correct_key: "B",
+          rubric_notes: "",
+        },
+        {
+          type: "CODE_DOC",
+          prompt: "Write a function `find_first_unique_char(s: str) -> int` that returns the index of the first non-repeating character in a string, or -1 if none exists.\n\nExplain your approach and time/space complexity.",
+          max_marks: 15,
+          mcq_options: [],
+          mcq_correct_key: "",
+          rubric_notes: "Award 10 marks for O(N) frequency map logic. Award 5 marks for clear complexity explanation.",
+        },
+      ]);
+      setHasRestoredDraft(false);
+      setDraftLastSaved(null);
+    }
+  };
 
   const regenerateCode = () => {
     setAccessCode("EXAM-" + Math.random().toString(36).substring(2, 6).toUpperCase());
@@ -97,43 +235,107 @@ export default function TeacherExamNewPage() {
 
     try {
       setSaving(true);
-      await apiRequest("/exams/", {
-        method: "POST",
-        body: JSON.stringify({
-          title,
-          description,
-          duration_minutes: durationMinutes,
-          access_code: accessCode.trim().toUpperCase(),
-          timer_mode: timerMode,
-          scheduled_start_time: timerMode === "GLOBAL" && scheduledStartTime ? new Date(scheduledStartTime).toISOString() : null,
-          scheduled_end_time: timerMode === "GLOBAL" && scheduledEndTime ? new Date(scheduledEndTime).toISOString() : null,
-          questions: questions.map((q, idx) => ({
-            ...q,
-            order_index: idx + 1,
-          })),
-        }),
-      });
+      const payload = {
+        title,
+        description,
+        duration_minutes: durationMinutes,
+        access_code: accessCode.trim().toUpperCase(),
+        timer_mode: timerMode,
+        is_active: isActive,
+        scheduled_start_time: timerMode === "GLOBAL" && scheduledStartTime ? new Date(scheduledStartTime).toISOString() : null,
+        scheduled_end_time: timerMode === "GLOBAL" && scheduledEndTime ? new Date(scheduledEndTime).toISOString() : null,
+        questions: questions.map((q, idx) => ({
+          ...q,
+          order_index: idx + 1,
+        })),
+      };
+
+      if (editExamId) {
+        await apiRequest(`/exams/${editExamId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiRequest("/exams/", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+
+      // Clear draft on successful save/publish
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(draftStorageKey);
+      }
+
       router.push("/teacher/dashboard");
     } catch (err: any) {
-      alert("Failed to create exam: " + err.message);
+      alert("Failed to save assessment: " + err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12 text-center text-gray-500 text-sm">
+        Loading assessment editor...
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      <Link
-        href="/teacher/dashboard"
-        className="text-xs font-medium text-gray-600 hover:text-gray-900 transition"
-      >
-        ← Back to Dashboard
-      </Link>
+      {/* Top Navigation & Status Bar */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/teacher/dashboard"
+          className="text-xs font-medium text-gray-600 hover:text-gray-900 transition"
+        >
+          ← Back to Dashboard
+        </Link>
+
+        <div className="flex items-center space-x-3">
+          {draftLastSaved && (
+            <span className="text-[11px] text-gray-400 font-mono">
+              Auto-saved draft at {draftLastSaved}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="text-xs text-red-600 hover:text-red-800 font-medium transition"
+          >
+            Reset Draft
+          </button>
+        </div>
+      </div>
+
+      {/* Restored Draft Alert Banner */}
+      {hasRestoredDraft && !editExamId && (
+        <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800 flex items-center justify-between">
+          <span>Your previous unsaved assessment draft has been restored automatically.</span>
+          <button
+            onClick={() => setHasRestoredDraft(false)}
+            className="text-amber-900 font-bold ml-2 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Exam Metadata & Access Code */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
-          <h2 className="text-base font-bold text-gray-900">Assessment Information & Access Code</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900">
+              {editExamId ? "Edit Assessment & Questions" : "Assessment Information & Access Code"}
+            </h2>
+            {editExamId && (
+              <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono font-semibold">
+                Editing: {accessCode}
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
@@ -378,9 +580,23 @@ export default function TeacherExamNewPage() {
           disabled={saving}
           className="w-full bg-gray-900 hover:bg-black text-white font-medium py-2.5 rounded transition text-sm disabled:opacity-50"
         >
-          {saving ? "Publishing Assessment..." : "Publish Assessment"}
+          {saving
+            ? editExamId
+              ? "Saving Changes..."
+              : "Publishing Assessment..."
+            : editExamId
+            ? "Save Changes"
+            : "Publish Assessment"}
         </button>
       </form>
     </div>
+  );
+}
+
+export default function TeacherExamNewPage() {
+  return (
+    <Suspense fallback={<div className="max-w-4xl mx-auto px-4 py-12 text-center text-gray-500 text-sm">Loading editor...</div>}>
+      <ExamEditorForm />
+    </Suspense>
   );
 }

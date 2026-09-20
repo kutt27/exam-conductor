@@ -167,6 +167,53 @@ async def toggle_exam_status(
     await db.refresh(exam)
     return exam
 
+@router.put("/{exam_id}", response_model=ExamOut)
+async def update_exam(
+    exam_id: uuid.UUID,
+    payload: ExamCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN))
+):
+    """Update an existing assessment and its questions"""
+    query = select(Exam).options(selectinload(Exam.questions)).where(Exam.id == exam_id)
+    if current_user.role == UserRole.TEACHER:
+        query = query.where(Exam.teacher_id == current_user.id)
+    result = await db.execute(query)
+    exam = result.scalar_one_or_none()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found or access denied.")
+
+    exam.title = payload.title
+    exam.description = payload.description
+    exam.duration_minutes = payload.duration_minutes
+    if payload.access_code and payload.access_code.strip():
+        exam.access_code = payload.access_code.strip().upper()
+    exam.timer_mode = payload.timer_mode or "LOCAL"
+    exam.scheduled_start_time = payload.scheduled_start_time
+    exam.scheduled_end_time = payload.scheduled_end_time
+    exam.is_active = payload.is_active
+
+    # Replace questions
+    from sqlalchemy import delete
+    await db.execute(delete(Question).where(Question.exam_id == exam.id))
+    for q_data in payload.questions:
+        q = Question(
+            exam_id=exam.id,
+            type=q_data.type,
+            order_index=q_data.order_index,
+            prompt=q_data.prompt,
+            max_marks=q_data.max_marks,
+            mcq_options=q_data.mcq_options,
+            mcq_correct_key=q_data.mcq_correct_key,
+            rubric_notes=q_data.rubric_notes,
+        )
+        db.add(q)
+
+    await db.commit()
+    query = select(Exam).options(selectinload(Exam.questions)).where(Exam.id == exam.id)
+    res = await db.execute(query)
+    return res.scalar_one()
+
 @router.get("/{exam_id}", response_model=ExamOut)
 async def get_exam(
     exam_id: uuid.UUID,

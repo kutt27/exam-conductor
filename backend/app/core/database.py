@@ -16,11 +16,14 @@ if "asyncpg" in db_url:
         "prepared_statement_cache_size": 0
     }
 
+from sqlalchemy.pool import NullPool
+
 engine = create_async_engine(
     db_url,
     echo=False,
     future=True,
     pool_pre_ping=True,
+    poolclass=NullPool,
     connect_args=connect_args
 )
 

@@ -26,14 +26,6 @@ export function Navbar() {
 
             {user && (
               <div className="hidden md:flex items-center space-x-4 text-sm">
-                {user.role === "STUDENT" && (
-                  <Link
-                    href="/student/exams"
-                    className="text-gray-600 hover:text-gray-900 font-medium transition"
-                  >
-                    Exams
-                  </Link>
-                )}
                 {user.role === "TEACHER" && (
                   <Link
                     href="/teacher/dashboard"
@@ -65,9 +57,9 @@ export function Navbar() {
           <div className="flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-3 text-sm">
-                <div className="text-right hidden sm:block">
-                  <span className="text-xs font-medium text-gray-900 block leading-tight">{user.full_name}</span>
-                  <span className="text-[11px] text-gray-500">{user.email}</span>
+                <div className="text-right hidden sm:flex sm:flex-col justify-center">
+                  <span className="text-xs font-semibold text-gray-900 leading-none">{user.full_name}</span>
+                  <span className="text-[11px] text-gray-500 leading-none mt-0.5">{user.email}</span>
                 </div>
                 
                 <span className={`text-[11px] font-medium px-2 py-0.5 rounded border ${

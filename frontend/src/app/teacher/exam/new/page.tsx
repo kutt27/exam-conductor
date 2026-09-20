@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
 
-interface NewQuestion {
+interface QuestionDraft {
   type: "MCQ" | "CODE_DOC";
   prompt: string;
   max_marks: number;
@@ -14,73 +14,99 @@ interface NewQuestion {
   rubric_notes: string;
 }
 
-export default function CreateExamPage() {
+export default function TeacherExamNewPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(45);
-  const [questions, setQuestions] = useState<NewQuestion[]>([
+  const [accessCode, setAccessCode] = useState(() => "EXAM-" + Math.random().toString(36).substring(2, 6).toUpperCase());
+  const [timerMode, setTimerMode] = useState<"LOCAL" | "GLOBAL">("LOCAL");
+  const [scheduledStartTime, setScheduledStartTime] = useState("");
+  const [scheduledEndTime, setScheduledEndTime] = useState("");
+
+  const [questions, setQuestions] = useState<QuestionDraft[]>([
     {
       type: "MCQ",
-      prompt: "What is the worst-case time complexity of QuickSort?",
+      prompt: "What is the average time complexity of searching in a balanced Binary Search Tree?",
       max_marks: 5,
-      mcq_options: ["A) O(N)", "B) O(N log N)", "C) O(N^2)", "D) O(1)"],
-      mcq_correct_key: "C",
+      mcq_options: ["A) O(1)", "B) O(log N)", "C) O(N)", "D) O(N log N)"],
+      mcq_correct_key: "B",
       rubric_notes: "",
     },
     {
       type: "CODE_DOC",
-      prompt: "Write a function `is_palindrome(s: str) -> bool` that checks if a string is a palindrome ignoring cases and non-alphanumeric characters. Explain edge cases and time/space complexity.",
+      prompt: "Write a function `find_first_unique_char(s: str) -> int` that returns the index of the first non-repeating character in a string, or -1 if none exists.\n\nExplain your approach and time/space complexity.",
       max_marks: 15,
       mcq_options: [],
       mcq_correct_key: "",
-      rubric_notes: "Award full marks for two-pointer approach with O(1) extra space. Check for empty strings and single characters.",
+      rubric_notes: "Award 10 marks for O(N) frequency map logic. Award 5 marks for clear complexity explanation.",
     },
   ]);
   const [saving, setSaving] = useState(false);
 
+  const regenerateCode = () => {
+    setAccessCode("EXAM-" + Math.random().toString(36).substring(2, 6).toUpperCase());
+  };
+
   const addQuestion = (type: "MCQ" | "CODE_DOC") => {
-    setQuestions((prev) => [
-      ...prev,
-      {
-        type,
-        prompt: "",
-        max_marks: type === "MCQ" ? 5 : 15,
-        mcq_options: type === "MCQ" ? ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"] : [],
-        mcq_correct_key: type === "MCQ" ? "A" : "",
-        rubric_notes: "",
-      },
-    ]);
+    if (type === "MCQ") {
+      setQuestions((prev) => [
+        ...prev,
+        {
+          type: "MCQ",
+          prompt: "",
+          max_marks: 5,
+          mcq_options: ["A) ", "B) ", "C) ", "D) "],
+          mcq_correct_key: "A",
+          rubric_notes: "",
+        },
+      ]);
+    } else {
+      setQuestions((prev) => [
+        ...prev,
+        {
+          type: "CODE_DOC",
+          prompt: "",
+          max_marks: 10,
+          mcq_options: [],
+          mcq_correct_key: "",
+          rubric_notes: "",
+        },
+      ]);
+    }
+  };
+
+  const updateQuestion = (index: number, field: string, value: any) => {
+    setQuestions((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
   const removeQuestion = (index: number) => {
     setQuestions((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateQuestion = (index: number, field: keyof NewQuestion, val: any) => {
-    setQuestions((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: val };
-      return copy;
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || questions.length === 0) {
-      alert("Please provide a title and at least one question.");
+    if (questions.length === 0) {
+      alert("Please add at least one question.");
       return;
     }
 
     try {
       setSaving(true);
-      await apiRequest("/exams", {
+      await apiRequest("/exams/", {
         method: "POST",
         body: JSON.stringify({
           title,
           description,
           duration_minutes: durationMinutes,
-          is_active: true,
+          access_code: accessCode.trim().toUpperCase(),
+          timer_mode: timerMode,
+          scheduled_start_time: timerMode === "GLOBAL" && scheduledStartTime ? new Date(scheduledStartTime).toISOString() : null,
+          scheduled_end_time: timerMode === "GLOBAL" && scheduledEndTime ? new Date(scheduledEndTime).toISOString() : null,
           questions: questions.map((q, idx) => ({
             ...q,
             order_index: idx + 1,
@@ -105,9 +131,9 @@ export default function CreateExamPage() {
       </Link>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Exam Metadata */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
-          <h2 className="text-base font-bold text-gray-900">Assessment Information</h2>
+        {/* Exam Metadata & Access Code */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-5">
+          <h2 className="text-base font-bold text-gray-900">Assessment Information & Access Code</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
@@ -136,7 +162,99 @@ export default function CreateExamPage() {
             </div>
           </div>
 
-          <div>
+          {/* Access Code Input */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Unique Access Code (Required by Candidates)
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  required
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. MATH-101"
+                  className="flex-1 px-3 py-2 text-sm uppercase tracking-wider font-mono font-bold border border-gray-300 rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={regenerateCode}
+                  className="px-3 py-2 border border-gray-300 text-xs font-medium rounded hover:bg-gray-50 transition"
+                  title="Generate new random code"
+                >
+                  Regenerate
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Timer Mode Selection */}
+          <div className="pt-2 border-t border-gray-100 space-y-3">
+            <label className="block text-xs font-semibold text-gray-900 uppercase tracking-wider">
+              Clock & Timing Mode
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setTimerMode("LOCAL")}
+                className={`p-3.5 rounded border text-left transition ${
+                  timerMode === "LOCAL"
+                    ? "border-gray-900 bg-gray-50 text-gray-900 ring-1 ring-gray-900"
+                    : "border-gray-200 hover:bg-gray-50 text-gray-600"
+                }`}
+              >
+                <div className="text-xs font-bold">Local Clock (Per Candidate)</div>
+                <div className="text-[11px] text-gray-500 mt-1">
+                  Each candidate receives their own timer ({durationMinutes}m) starting the moment they enter the exam.
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTimerMode("GLOBAL")}
+                className={`p-3.5 rounded border text-left transition ${
+                  timerMode === "GLOBAL"
+                    ? "border-gray-900 bg-gray-50 text-gray-900 ring-1 ring-gray-900"
+                    : "border-gray-200 hover:bg-gray-50 text-gray-600"
+                }`}
+              >
+                <div className="text-xs font-bold">Global Clock (Synchronized)</div>
+                <div className="text-[11px] text-gray-500 mt-1">
+                  All candidates share the exact same synchronized countdown. Late joiners only receive remaining window.
+                </div>
+              </button>
+            </div>
+
+            {timerMode === "GLOBAL" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded border border-gray-200 mt-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                    Scheduled Start (Optional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledStartTime}
+                    onChange={(e) => setScheduledStartTime(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                    Scheduled End (Optional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledEndTime}
+                    onChange={(e) => setScheduledEndTime(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-gray-100">
             <label className="block text-xs font-medium text-gray-700 mb-1">Instructions / Description</label>
             <textarea
               rows={2}

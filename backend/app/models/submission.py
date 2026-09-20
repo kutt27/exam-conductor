@@ -2,14 +2,17 @@ import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey, Enum as SQLEnum, JSON
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class SubmissionStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     SUBMITTED = "SUBMITTED"
+    PENDING_EVALUATION = "PENDING_EVALUATION"
+    EVALUATING = "EVALUATING"
     EVALUATED = "EVALUATED"
+    FAILED = "FAILED"
 
 class Submission(Base):
     __tablename__ = "submissions"
@@ -17,9 +20,15 @@ class Submission(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(SQLEnum(SubmissionStatus, name="submission_status"), nullable=False, default=SubmissionStatus.IN_PROGRESS)
+    status = Column(SQLEnum(SubmissionStatus, name="submission_status"), nullable=False, default=SubmissionStatus.PENDING_EVALUATION)
     total_score = Column(Float, default=0.0, nullable=False)
     cheat_flags = Column(JSON, default=dict, nullable=False)
+    
+    # Idempotency & Worker Lease Locks
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    locked_by = Column(String(100), nullable=True)
+    eval_error = Column(Text, nullable=True)
+
     started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     submitted_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -42,3 +51,10 @@ class SubmissionAnswer(Base):
 
     submission = relationship("Submission", back_populates="answers")
     question = relationship("Question", back_populates="answers", lazy="joined")
+
+class EvaluationCache(Base):
+    __tablename__ = "evaluation_cache"
+
+    content_hash = Column(String(64), primary_key=True, index=True)
+    evaluation_result = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

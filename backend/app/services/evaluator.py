@@ -27,7 +27,6 @@ def evaluate_mcq(student_answer: Optional[str], correct_key: Optional[str], max_
     clean_student = student_answer.strip().upper()
     clean_correct = correct_key.strip().upper()
 
-    # Match exact key or starting letter (e.g. "A" vs "A) O(N)")
     if clean_student == clean_correct:
         return float(max_marks)
     if clean_student.startswith(clean_correct) or clean_correct.startswith(clean_student):
@@ -41,8 +40,8 @@ async def evaluate_code_doc_with_groq(
     rubric_notes: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Evaluates student code document submission using Groq Llama 3.3 70B model.
-    Falls back to structured heuristic evaluation if GROQ_API_KEY is not configured.
+    Evaluates student code document submission using Groq model.
+    Auto-tries compatible Groq models, with graceful fallback to heuristic evaluation.
     """
     if not student_answer or not student_answer.strip():
         return {
@@ -56,7 +55,6 @@ async def evaluate_code_doc_with_groq(
             "student_constructive_feedback": "Please provide an explanation or code outline to receive marks."
         }
 
-    # If Groq API key is present, invoke Groq SDK
     if settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip() and not settings.GROQ_API_KEY.startswith("gsk_your_groq"):
         try:
             from groq import AsyncGroq
@@ -77,26 +75,41 @@ Student Solution:
 Return a valid JSON object matching the CodeEvaluationSchema schema:
 {schema_json}
 """
-            completion = await client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-                max_tokens=1024
-            )
-            raw_response = completion.choices[0].message.content
-            parsed = json.loads(raw_response)
+            models_to_try = [
+                settings.GROQ_MODEL,
+                "llama-3.3-70b-versatile",
+                "llama-3.1-70b-versatile",
+                "llama-3.1-8b-instant",
+                "llama3-70b-8192"
+            ]
             
-            # Validate with Pydantic
-            validated = CodeEvaluationSchema(**parsed)
-            return validated.model_dump()
+            seen_models = set()
+            for model_name in models_to_try:
+                if model_name in seen_models:
+                    continue
+                seen_models.add(model_name)
+                try:
+                    completion = await client.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
+                            {"role": "user", "content": user_content}
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.2,
+                        max_tokens=1024
+                    )
+                    raw_response = completion.choices[0].message.content
+                    parsed = json.loads(raw_response)
+                    validated = CodeEvaluationSchema(**parsed)
+                    return validated.model_dump()
+                except Exception as model_err:
+                    logger.warning(f"Groq model {model_name} failed: {model_err}. Trying next fallback model...")
+                    continue
+
         except Exception as e:
             logger.error(f"Error calling Groq API: {e}. Falling back to heuristic grader.")
 
-    # Fallback heuristic grader for offline/local development without API key
     return fallback_heuristic_evaluation(prompt, student_answer, max_marks, rubric_notes)
 
 def fallback_heuristic_evaluation(

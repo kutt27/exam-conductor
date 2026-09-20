@@ -55,6 +55,29 @@ async def start_exam_session(
     )
     sub = existing_sub.scalar_one_or_none()
 
+    if sub and sub.status != SubmissionStatus.IN_PROGRESS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have already completed and submitted this examination. Re-taking exams is not permitted."
+        )
+
+    # Check if student currently has another exam in progress
+    if current_user.role == UserRole.STUDENT and not sub:
+        active_other_res = await db.execute(
+            select(Submission).join(Exam, Submission.exam_id == Exam.id).where(
+                Submission.student_id == current_user.id,
+                Submission.exam_id != payload.exam_id,
+                Submission.status == SubmissionStatus.IN_PROGRESS,
+                Exam.is_active == True
+            )
+        )
+        other_active_sub = active_other_res.scalars().first()
+        if other_active_sub:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You already have another assessment in progress. Attending multiple exams concurrently is prohibited."
+            )
+
     if not sub:
         sub = Submission(
             exam_id=payload.exam_id,
@@ -139,6 +162,12 @@ async def submit_exam(
     )
     sub_record = existing_sub.scalar_one_or_none()
 
+    if sub_record and sub_record.status != SubmissionStatus.IN_PROGRESS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This examination has already been submitted and cannot be resubmitted."
+        )
+
     if not sub_record:
         # Create new submission record
         sub_record = Submission(
@@ -152,7 +181,7 @@ async def submit_exam(
         db.add(sub_record)
         await db.flush()
     else:
-        # Update existing submission to PENDING_EVALUATION
+        # Update existing in-progress submission to PENDING_EVALUATION
         sub_record.status = SubmissionStatus.PENDING_EVALUATION
         sub_record.cheat_flags = payload.cheat_flags
         sub_record.submitted_at = datetime.now(timezone.utc)

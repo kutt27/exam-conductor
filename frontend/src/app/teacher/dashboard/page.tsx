@@ -738,7 +738,7 @@ export default function TeacherDashboardPage() {
                             {/* Score */}
                             <td className="p-3.5 font-semibold text-gray-900 text-xs">
                               {cand.status === "EVALUATED" && cand.total_score !== null && cand.total_score !== undefined
-                                ? `${cand.total_score} / ${cand.max_marks}`
+                                ? `${cand.total_score}`
                                 : cand.status === "IN_PROGRESS"
                                 ? <span className="text-emerald-600 font-normal">Started</span>
                                 : cand.status === "NOT_STARTED"

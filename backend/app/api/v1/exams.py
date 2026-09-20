@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.user import User, UserRole
 from app.models.exam import Exam, generate_access_code
 from app.models.question import Question
+from app.models.submission import Submission, SubmissionStatus
 from app.schemas.exam import ExamCreate, ExamOut, StudentExamOut
 from app.api.deps import require_role, get_current_user
 
@@ -49,6 +50,22 @@ async def get_exam_by_access_code(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No active assessment found matching access code '{clean_code}'. Please check and try again."
         )
+
+    # Check if student already completed this exam
+    if current_user.role == UserRole.STUDENT:
+        existing_sub = await db.execute(
+            select(Submission).where(
+                Submission.exam_id == exam.id,
+                Submission.student_id == current_user.id
+            )
+        )
+        sub = existing_sub.scalar_one_or_none()
+        if sub and sub.status != SubmissionStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You have already completed and submitted this examination."
+            )
+
     return exam
 
 @router.get("/student/{exam_id}", response_model=StudentExamOut)
@@ -63,6 +80,22 @@ async def get_student_exam_detail(
     exam = result.scalar_one_or_none()
     if not exam or not exam.is_active:
         raise HTTPException(status_code=404, detail="Exam not found or inactive.")
+
+    # Check if student already completed this exam
+    if current_user.role == UserRole.STUDENT:
+        existing_sub = await db.execute(
+            select(Submission).where(
+                Submission.exam_id == exam_id,
+                Submission.student_id == current_user.id
+            )
+        )
+        sub = existing_sub.scalar_one_or_none()
+        if sub and sub.status != SubmissionStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You have already completed and submitted this examination."
+            )
+
     return exam
 
 @router.post("/", response_model=ExamOut, status_code=status.HTTP_201_CREATED)

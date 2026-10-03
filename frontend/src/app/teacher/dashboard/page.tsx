@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, API_URL } from "@/lib/api";
 
 interface BatchStatus {
   total: number;
@@ -51,20 +51,19 @@ export default function TeacherDashboardPage() {
   const [activeTab, setActiveTab] = useState<"EXAMS" | "STUDENTS">("EXAMS");
   const [exams, setExams] = useState<any[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggeringBatch, setTriggeringBatch] = useState(false);
   const [evaluatingSingleId, setEvaluatingSingleId] = useState<string | null>(null);
   const [togglingStatus, setTogglingStatus] = useState(false);
 
-  // Live Candidate Polling State
+  // Live Candidate State (On-demand Refresh)
   const [liveRosterData, setLiveRosterData] = useState<{
     summary: LiveRosterSummary;
     roster: LiveCandidate[];
     exam: any;
   } | null>(null);
-  const [isLivePolling, setIsLivePolling] = useState(true);
   const [lastPollTime, setLastPollTime] = useState<Date>(new Date());
   const [statusFilter, setStatusFilter] = useState<"ALL" | "IN_PROGRESS" | "SUBMITTED" | "NOT_STARTED" | "FLAGGED">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,17 +85,16 @@ export default function TeacherDashboardPage() {
     }
   }, []);
 
-  const loadSubmissionsAndStatus = useCallback(async (examId: string) => {
+  const loadSubmissionsAndStatus = useCallback(async (examId: string, showRefreshingState = false) => {
     try {
-      const [subs, status] = await Promise.all([
-        apiRequest<any[]>(`/review/exam/${examId}/submissions`),
-        apiRequest<BatchStatus>(`/review/exam/${examId}/evaluation-status`),
-      ]);
-      setSubmissions(subs);
+      if (showRefreshingState) setRefreshing(true);
+      const status = await apiRequest<BatchStatus>(`/review/exam/${examId}/evaluation-status`);
       setBatchStatus(status);
       await loadLiveRoster(examId);
     } catch (err) {
       console.error("Error loading exam review data", err);
+    } finally {
+      if (showRefreshingState) setRefreshing(false);
     }
   }, [loadLiveRoster]);
 
@@ -131,14 +129,14 @@ export default function TeacherDashboardPage() {
     if (!selectedExamId) return;
     loadSubmissionsAndStatus(selectedExamId);
 
-    const interval = setInterval(() => {
-      if (isLivePolling || batchStatus?.is_evaluating || (batchStatus?.evaluating && batchStatus.evaluating > 0)) {
+    // Only auto-poll if batch evaluation is actively in progress
+    if (batchStatus?.is_evaluating || (batchStatus?.evaluating && batchStatus.evaluating > 0)) {
+      const interval = setInterval(() => {
         loadSubmissionsAndStatus(selectedExamId);
-      }
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [selectedExamId, isLivePolling, batchStatus?.is_evaluating, batchStatus?.evaluating, loadSubmissionsAndStatus]);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedExamId, batchStatus?.is_evaluating, batchStatus?.evaluating, loadSubmissionsAndStatus]);
 
   const handleStartBatchEvaluation = async () => {
     if (!selectedExamId || triggeringBatch) return;
@@ -203,7 +201,7 @@ export default function TeacherDashboardPage() {
     try {
       setDownloadingCsv(true);
       const token = typeof window !== "undefined" ? localStorage.getItem("exam_token") : "";
-      const res = await fetch(`http://localhost:8000/api/v1/review/exam/${selectedExamId}/export-csv`, {
+      const res = await fetch(`${API_URL}/review/exam/${selectedExamId}/export-csv`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -237,7 +235,7 @@ export default function TeacherDashboardPage() {
     try {
       setCsvUploading(true);
       const token = localStorage.getItem("exam_token");
-      const res = await fetch("http://localhost:8000/api/v1/teacher/students/upload-csv", {
+      const res = await fetch(`${API_URL}/teacher/students/upload-csv`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -275,7 +273,7 @@ export default function TeacherDashboardPage() {
 
   const downloadExportCsv = () => {
     const token = localStorage.getItem("exam_token");
-    window.open(`http://localhost:8000/api/v1/teacher/students/export-csv`, "_blank");
+    window.open(`${API_URL}/teacher/students/export-csv`, "_blank");
   };
 
   if (loading) {
@@ -429,17 +427,17 @@ export default function TeacherDashboardPage() {
                   </h3>
                 </div>
 
-                {/* Live Polling Telemetry Feed Indicator */}
+                {/* On-Demand Telemetry Feed Indicator */}
                 <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3.5 py-2 text-xs">
                   <div className="flex items-center space-x-2">
                     <span className="relative flex h-2 w-2">
-                      {isLivePolling && (
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      {batchStatus?.is_evaluating && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                       )}
-                      <span className={`relative inline-flex rounded-full h-2 w-2 ${isLivePolling ? "bg-emerald-500" : "bg-gray-400"}`}></span>
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${batchStatus?.is_evaluating ? "bg-amber-500" : "bg-emerald-500"}`}></span>
                     </span>
                     <span className="font-semibold text-gray-800">
-                      {isLivePolling ? "Live Attendance Polling Active" : "Live Polling Paused"}
+                      {batchStatus?.is_evaluating ? "AI Evaluation In Progress..." : "Manual Sync Mode"}
                     </span>
                     <span className="text-gray-400 text-[11px] font-mono">
                       (Last synced: {format24Time(lastPollTime.toISOString())})
@@ -447,10 +445,12 @@ export default function TeacherDashboardPage() {
                   </div>
 
                   <button
-                    onClick={() => setIsLivePolling(!isLivePolling)}
-                    className="text-[11px] font-medium text-gray-600 hover:text-gray-900 underline"
+                    onClick={() => selectedExamId && loadSubmissionsAndStatus(selectedExamId, true)}
+                    disabled={refreshing}
+                    className="text-[11px] font-semibold text-gray-700 hover:text-gray-950 flex items-center space-x-1 px-2.5 py-1 bg-white border border-gray-200 rounded shadow-2xs hover:bg-gray-50 transition disabled:opacity-50"
                   >
-                    {isLivePolling ? "Pause Live Feed" : "Resume Live Feed"}
+                    <span className={refreshing ? "animate-spin inline-block" : ""}>🔄</span>
+                    <span>{refreshing ? "Refreshing..." : "Refresh Feed"}</span>
                   </button>
                 </div>
 
@@ -581,11 +581,12 @@ export default function TeacherDashboardPage() {
                   </Link>
 
                   <button
-                    onClick={() => selectedExamId && loadSubmissionsAndStatus(selectedExamId)}
-                    className="px-3.5 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 bg-white rounded text-xs font-semibold transition flex items-center justify-center whitespace-nowrap shadow-2xs"
+                    onClick={() => selectedExamId && loadSubmissionsAndStatus(selectedExamId, true)}
+                    disabled={refreshing}
+                    className="px-3.5 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 bg-white rounded text-xs font-semibold transition flex items-center justify-center whitespace-nowrap shadow-2xs disabled:opacity-50"
                     title="Refresh status now"
                   >
-                    Refresh
+                    {refreshing ? "Refreshing..." : "Refresh"}
                   </button>
                 </div>
               </div>

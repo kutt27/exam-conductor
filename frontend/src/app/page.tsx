@@ -5,19 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 
 export default function HomePage() {
-  const { user, login } = useAuth();
-  const router = useRouter();
-
-  const handleQuickLogin = async (email: string, role: string) => {
-    try {
-      await login(email, `${role.toLowerCase()}123`);
-      if (role === "STUDENT") router.push("/student/exams");
-      else if (role === "TEACHER") router.push("/teacher/dashboard");
-      else if (role === "ADMIN") router.push("/admin/users");
-    } catch (err: any) {
-      alert("Please ensure backend server is running: " + err.message);
-    }
-  };
+  const { user } = useAuth();
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-16 space-y-16">
@@ -36,7 +24,7 @@ export default function HomePage() {
             {user.role === "STUDENT" && (
               <Link
                 href="/student/exams"
-                className="bg-gray-900 hover:bg-black text-white text-sm font-medium px-5 py-2.5 rounded-md transition"
+                className="bg-gray-900 hover:bg-black text-white text-sm font-medium px-5 py-2.5 rounded-md transition shadow-2xs"
               >
                 Go to Examination Portal
               </Link>
@@ -44,47 +32,42 @@ export default function HomePage() {
             {user.role === "TEACHER" && (
               <Link
                 href="/teacher/dashboard"
-                className="bg-gray-900 hover:bg-black text-white text-sm font-medium px-5 py-2.5 rounded-md transition"
+                className="bg-gray-900 hover:bg-black text-white text-sm font-medium px-5 py-2.5 rounded-md transition shadow-2xs"
               >
                 Go to Teacher Dashboard
               </Link>
             )}
             {user.role === "ADMIN" && (
-              <Link
-                href="/admin/users"
-                className="bg-gray-900 hover:bg-black text-white text-sm font-medium px-5 py-2.5 rounded-md transition"
-              >
-                Go to Admin Console
-              </Link>
+              <div className="flex flex-wrap gap-2.5 justify-center">
+                <Link
+                  href="/admin/users"
+                  className="bg-gray-900 hover:bg-black text-white text-sm font-medium px-5 py-2.5 rounded-md transition shadow-2xs"
+                >
+                  Admin Console
+                </Link>
+                <Link
+                  href="/teacher/dashboard"
+                  className="bg-white hover:bg-gray-50 text-gray-800 text-sm font-medium px-5 py-2.5 rounded-md border border-gray-300 transition shadow-2xs"
+                >
+                  Instructor Dashboard
+                </Link>
+              </div>
             )}
           </div>
         ) : (
-          <div className="pt-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Quick Role Login:
-            </p>
-            <div className="flex flex-wrap justify-center gap-2.5">
-              <button
-                onClick={() => handleQuickLogin("student@exam.com", "STUDENT")}
-                className="bg-white hover:bg-gray-50 text-gray-800 text-xs font-medium px-4 py-2 rounded border border-gray-300 shadow-2xs transition"
-              >
-                Student (Alex)
-              </button>
-
-              <button
-                onClick={() => handleQuickLogin("teacher@exam.com", "TEACHER")}
-                className="bg-white hover:bg-gray-50 text-gray-800 text-xs font-medium px-4 py-2 rounded border border-gray-300 shadow-2xs transition"
-              >
-                Teacher (Prof. Turing)
-              </button>
-
-              <button
-                onClick={() => handleQuickLogin("admin@exam.com", "ADMIN")}
-                className="bg-white hover:bg-gray-50 text-gray-800 text-xs font-medium px-4 py-2 rounded border border-gray-300 shadow-2xs transition"
-              >
-                Admin Console
-              </button>
-            </div>
+          <div className="flex justify-center gap-3 pt-4">
+            <Link
+              href="/login"
+              className="bg-gray-900 hover:bg-black text-white text-sm font-semibold px-6 py-2.5 rounded-md transition shadow-2xs"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/student/exams"
+              className="bg-white hover:bg-gray-50 text-gray-800 text-sm font-semibold px-5 py-2.5 rounded-md border border-gray-300 transition shadow-2xs"
+            >
+              Candidate Portal
+            </Link>
           </div>
         )}
       </div>

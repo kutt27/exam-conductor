@@ -20,8 +20,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      router.push("/");
+      const loggedUser = await login(email, password);
+      if (loggedUser.role === "ADMIN") {
+        router.push("/admin/users");
+      } else if (loggedUser.role === "TEACHER") {
+        router.push("/teacher/dashboard");
+      } else {
+        router.push("/student/exams");
+      }
     } catch (err: any) {
       setError(err.message || "Failed to log in.");
     } finally {
@@ -31,7 +37,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4">
-      <div className="max-w-sm w-full bg-white rounded-lg border border-gray-200 p-8 space-y-6">
+      <div className="max-w-sm w-full bg-white rounded-lg border border-gray-200 p-8 space-y-6 shadow-2xs">
         <div className="text-center space-y-1">
           <h2 className="text-xl font-bold text-gray-900">Sign in to your account</h2>
           <p className="text-xs text-gray-500">Enter your credentials to continue</p>
@@ -51,7 +57,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="alex@exam.com"
+              placeholder="name@example.com"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-gray-900 focus:outline-none"
             />
           </div>

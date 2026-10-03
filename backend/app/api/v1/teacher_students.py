@@ -34,16 +34,16 @@ async def list_students(
     current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN))
 ):
     """List all registered students"""
-    query = select(User).where(User.role == UserRole.STUDENT).order_by(User.created_at.desc())
+    query = select(User.id, User.full_name, User.email, User.role, User.created_at).where(User.role == UserRole.STUDENT).order_by(User.created_at.desc())
     result = await db.execute(query)
-    students = result.scalars().all()
+    students = result.all()
     return [
         {
             "id": str(s.id),
             "full_name": s.full_name,
             "email": s.email,
             "role": s.role.value if hasattr(s.role, "value") else str(s.role),
-            "created_at": s.created_at.isoformat()
+            "created_at": s.created_at.isoformat() if s.created_at else ""
         }
         for s in students
     ]

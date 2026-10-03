@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.api.v1 import api_router
@@ -28,6 +29,9 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan
 )
+
+# GZip Compression to reduce egress by 80%
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Setup CORS for Next.js client
 app.add_middleware(

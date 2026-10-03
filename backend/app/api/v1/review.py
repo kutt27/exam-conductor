@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
 from app.core.database import get_db
 from app.models.user import User, UserRole
 from app.models.exam import Exam
+from app.models.question import Question
 from app.models.submission import Submission, SubmissionAnswer
 from app.schemas.submission import SubmissionOut, SubmissionAnswerOut, ScoreOverride
 from app.services.queue_engine import queue_manager
@@ -42,32 +44,51 @@ async def get_exam_live_roster(
 ):
     """
     Live candidate pooling endpoint for teachers.
-    Aggregates all candidate accounts, their real-time exam status (Not Started, In Progress, Submitted),
-    live elapsed times, security strike telemetry, and scores.
+    Aggregates all candidate accounts, their real-time exam status,
+    live elapsed times, security strike telemetry, and scores without loading heavy answer payloads.
     """
-    # 1. Fetch Exam
+    # 1. Fetch Exam (selective columns)
     exam_res = await db.execute(
-        select(Exam).options(selectinload(Exam.questions)).where(Exam.id == exam_id)
+        select(
+            Exam.id,
+            Exam.title,
+            Exam.access_code,
+            Exam.duration_minutes,
+            Exam.timer_mode,
+            Exam.is_active
+        ).where(Exam.id == exam_id)
     )
-    exam = exam_res.scalar_one_or_none()
+    exam = exam_res.first()
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found.")
 
-    max_marks = sum(q.max_marks for q in exam.questions)
-
-    # 2. Fetch all registered students
-    students_res = await db.execute(
-        select(User).where(User.role == UserRole.STUDENT).order_by(User.full_name.asc())
+    # Calculate max marks efficiently
+    marks_res = await db.execute(
+        select(func.coalesce(func.sum(Question.max_marks), 0)).where(Question.exam_id == exam_id)
     )
-    students = students_res.scalars().all()
+    max_marks = marks_res.scalar() or 0
 
-    # 3. Fetch all submissions for this exam
+    # 2. Fetch all registered students (selective columns)
+    students_res = await db.execute(
+        select(User.id, User.full_name, User.email)
+        .where(User.role == UserRole.STUDENT)
+        .order_by(User.full_name.asc())
+    )
+    students = students_res.all()
+
+    # 3. Fetch submissions (selective columns only, no answer/question payloads)
     subs_res = await db.execute(
-        select(Submission).options(
-            selectinload(Submission.answers)
+        select(
+            Submission.id,
+            Submission.student_id,
+            Submission.status,
+            Submission.started_at,
+            Submission.submitted_at,
+            Submission.cheat_flags,
+            Submission.total_score
         ).where(Submission.exam_id == exam_id)
     )
-    submissions = subs_res.scalars().all()
+    submissions = subs_res.all()
     subs_by_student = {s.student_id: s for s in submissions}
 
     # 4. Build live roster and statistics
@@ -101,7 +122,6 @@ async def get_exam_live_roster(
             # Calculate elapsed time
             if sub.started_at:
                 end_time = sub.submitted_at if sub.submitted_at else now_utc
-                # Make sure timezone aware
                 st_time = sub.started_at if sub.started_at.tzinfo else sub.started_at.replace(tzinfo=timezone.utc)
                 elapsed_sec = max(0, int((end_time - st_time).total_seconds()))
             else:
@@ -168,20 +188,36 @@ async def export_exam_results_csv(
     Can be downloaded at any time (pre-exam, during exam, or post-evaluation).
     """
     exam_res = await db.execute(
-        select(Exam).options(selectinload(Exam.questions)).where(Exam.id == exam_id)
+        select(Exam.id, Exam.title, Exam.access_code).where(Exam.id == exam_id)
     )
-    exam = exam_res.scalar_one_or_none()
+    exam = exam_res.first()
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found.")
 
-    max_marks = sum(q.max_marks for q in exam.questions)
+    marks_res = await db.execute(
+        select(func.coalesce(func.sum(Question.max_marks), 0)).where(Question.exam_id == exam_id)
+    )
+    max_marks = marks_res.scalar() or 0
 
-    # Fetch students & submissions
-    students_res = await db.execute(select(User).where(User.role == UserRole.STUDENT).order_by(User.full_name.asc()))
-    students = students_res.scalars().all()
+    # Fetch students & submissions (selective columns)
+    students_res = await db.execute(
+        select(User.id, User.full_name, User.email)
+        .where(User.role == UserRole.STUDENT)
+        .order_by(User.full_name.asc())
+    )
+    students = students_res.all()
 
-    subs_res = await db.execute(select(Submission).where(Submission.exam_id == exam_id))
-    submissions = subs_res.scalars().all()
+    subs_res = await db.execute(
+        select(
+            Submission.student_id,
+            Submission.status,
+            Submission.started_at,
+            Submission.submitted_at,
+            Submission.cheat_flags,
+            Submission.total_score
+        ).where(Submission.exam_id == exam_id)
+    )
+    submissions = subs_res.all()
     subs_by_student = {s.student_id: s for s in submissions}
 
     now_utc = datetime.now(timezone.utc)

@@ -9,7 +9,8 @@ A soft spoken software built for conducting exams for students with auto-grading
 
 ## Features
 - Rubric for every coding/theory question for valuation. For example, if for a question, we can set it to look into the logic **rather** than the syntax.
-- Mental test-case tracing with passed/failed execution traces and constructive feedback.
+- Mental test-case tracing with passed/failed execution traces and constructive feedback. 
+- Random assign of MCQ question for each participant. Order of MCQ will be different for students.
 - Zero-latency auto-grading of multiple-choice questions.
 - Fullscreen enforcement and exit detection.
 - Tab switch **and** window blur detection via `visibilitychange`.

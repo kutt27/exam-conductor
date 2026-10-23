@@ -1,24 +1,13 @@
-# Command Code preferences (do not commit)
-.commandcode/
-
-# Dependencies
 frontend/node_modules/
 backend/venv/
 venv/
-
-# Build outputs
-# Next.js
+.commandcode/
 frontend/.next/
 frontend/out/
-
-# Python build artifacts
 build/
 dist/
 *.egg-info/
 *.egg
-
-# Environment variables
-# Keep .env.example — ignore actual .env files with secrets
 .env
 .env.local
 .env.*.local
@@ -26,26 +15,18 @@ frontend/.env.local
 frontend/.env.*.local
 backend/.env
 backend/.env.local
-
-# Python caches
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
-# Python testing / linting caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
-
-# Database
 *.db
 *.sqlite
 *.sqlite3
-
-# OS files
 .DS_Store
 .DS_Store?
 ._*
@@ -54,21 +35,8 @@ htmlcov/
 ehthumbs.db
 Thumbs.db
 Desktop.ini
-
-# IDE / Editor
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-*.sublime-project
-*.sublime-workspace
-
-# Logs
 *.log
 npm-debug.log*
 frontend/*.log
-
-# Temporary files
 *.tmp
 *.temp

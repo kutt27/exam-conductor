@@ -5,7 +5,7 @@ A soft spoken software built for conducting exams for students with auto-grading
 ## Solved problems?
 - Saves the time of the exam conductor(s) by allocating the valuation to **an** AI assistant.
 - Does not get biased under time constraint**s**.
-- Valuates every type of answer from the students**’** side rather than checking every approach of `n` students.
+- Valuates every type of answer from the student's side rather than checking every approach of `n` students.
 
 ## Features
 - Rubric for every coding/theory question for valuation. For example, if for a question, we can set **it** to look into the logic **rather** than the syntax.

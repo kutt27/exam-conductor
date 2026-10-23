@@ -192,6 +192,70 @@ export default function StudentExamRunnerPage() {
 
   useExamSecurity(handleStrike, !loading && !!exam && hasStartedSession);
 
+  const clearSessionStorage = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(`${storagePrefix}_q_order`);
+      localStorage.removeItem(`${storagePrefix}_answers`);
+      localStorage.removeItem(`${storagePrefix}_strikes`);
+      localStorage.removeItem(`${storagePrefix}_curr_q`);
+      localStorage.removeItem(`${storagePrefix}_start_time`);
+      localStorage.removeItem(`${storagePrefix}_started`);
+    }
+  }, [storagePrefix]);
+
+  const handleSubmitExam = useCallback(async (isAutoSubmit: boolean | any = false) => {
+    const auto = isAutoSubmit === true;
+    if (isSubmitting) return;
+
+    if (!auto) {
+      const confirmSubmit = window.confirm("Are you ready to submit your assessment responses?");
+      if (!confirmSubmit) return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const answerPayload = (exam?.questions || []).map((q) => ({
+        question_id: q.id,
+        student_answer: answers[q.id] || "",
+      }));
+
+      const cheatFlags = {
+        total_strikes: strikes.length,
+        events: strikes,
+      };
+
+      const res = await apiRequest("/submissions/", {
+        method: "POST",
+        body: JSON.stringify({
+          exam_id: examId,
+          answers: answerPayload,
+          cheat_flags: cheatFlags,
+        }),
+      });
+
+      clearSessionStorage();
+
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen();
+        } catch (e) {}
+      }
+
+      if (auto) {
+        alert("The instructor has concluded this assessment. Your responses have been automatically submitted.");
+      }
+
+      router.push(`/student/result/${res.id}`);
+    } catch (err: any) {
+      if (err.message && (err.message.includes("closed") || err.message.includes("403"))) {
+        setIsExamClosed(true);
+      } else {
+        alert("Submission error: " + err.message);
+      }
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, exam?.questions, answers, strikes, examId, clearSessionStorage, router]);
+
   // Periodic Heartbeat every 10s during active session
   useEffect(() => {
     if (!hasStartedSession || isSubmitting || isExamClosed) return;
@@ -206,27 +270,18 @@ export default function StudentExamRunnerPage() {
           }),
         });
         if (res && res.is_active === false) {
-          setIsExamClosed(true);
-          if (document.fullscreenElement) {
-            try {
-              await document.exitFullscreen();
-            } catch (e) {}
-          }
+          // Instructor concluded assessment: Auto-submit current student responses!
+          await handleSubmitExam(true);
         }
       } catch (err: any) {
         if (err.message && (err.message.includes("closed") || err.message.includes("403"))) {
-          setIsExamClosed(true);
-          if (document.fullscreenElement) {
-            try {
-              await document.exitFullscreen();
-            } catch (e) {}
-          }
+          await handleSubmitExam(true);
         }
       }
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [hasStartedSession, isSubmitting, isExamClosed, examId, strikes]);
+  }, [hasStartedSession, isSubmitting, isExamClosed, examId, strikes, handleSubmitExam]);
 
   // Fullscreen Lockdown Event Listener
   useEffect(() => {
@@ -292,60 +347,7 @@ export default function StudentExamRunnerPage() {
     }
   };
 
-  const clearSessionStorage = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(`${storagePrefix}_q_order`);
-      localStorage.removeItem(`${storagePrefix}_answers`);
-      localStorage.removeItem(`${storagePrefix}_strikes`);
-      localStorage.removeItem(`${storagePrefix}_curr_q`);
-      localStorage.removeItem(`${storagePrefix}_start_time`);
-      localStorage.removeItem(`${storagePrefix}_started`);
-    }
-  };
 
-  const handleSubmitExam = async () => {
-    if (isSubmitting) return;
-    const confirmSubmit = window.confirm("Are you ready to submit your assessment responses?");
-    if (!confirmSubmit) return;
-
-    try {
-      setIsSubmitting(true);
-      const answerPayload = (exam?.questions || []).map((q) => ({
-        question_id: q.id,
-        student_answer: answers[q.id] || "",
-      }));
-
-      const cheatFlags = {
-        total_strikes: strikes.length,
-        events: strikes,
-      };
-
-      const res = await apiRequest("/submissions/", {
-        method: "POST",
-        body: JSON.stringify({
-          exam_id: examId,
-          answers: answerPayload,
-          cheat_flags: cheatFlags,
-        }),
-      });
-
-      // Clear local storage session upon successful submission
-      clearSessionStorage();
-
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      }
-
-      router.push(`/student/result/${res.id}`);
-    } catch (err: any) {
-      if (err.message && (err.message.includes("closed") || err.message.includes("403"))) {
-        setIsExamClosed(true);
-      } else {
-        alert("Submission error: " + err.message);
-      }
-      setIsSubmitting(false);
-    }
-  };
 
   if (isExamClosed) {
     return (

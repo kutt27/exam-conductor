@@ -175,7 +175,7 @@ export default function TeacherDashboardPage() {
     const isCurrentlyActive = currentExam?.is_active !== false;
 
     const confirmMsg = isCurrentlyActive
-      ? "Are you sure you want to end this assessment early? Once closed, students will be locked out and no further submissions will be accepted."
+      ? "Are you sure you want to end this assessment? All in-progress student exams will be automatically finalized and submitted."
       : "Are you sure you want to reopen this assessment for students?";
 
     if (!window.confirm(confirmMsg)) return;

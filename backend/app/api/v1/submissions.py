@@ -147,22 +147,28 @@ async def submit_exam(
     exam = exam_res.scalar_one_or_none()
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found.")
-    if not exam.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This examination has been closed by the instructor. Submissions are no longer accepted."
-        )
-
-    # 2. Check for duplicate active submission
+    # 2. Check for duplicate or existing submission
     existing_sub = await db.execute(
-        select(Submission).where(
+        select(Submission).options(selectinload(Submission.answers)).where(
             Submission.exam_id == payload.exam_id,
             Submission.student_id == current_user.id
         )
     )
     sub_record = existing_sub.scalar_one_or_none()
 
-    if sub_record and sub_record.status != SubmissionStatus.IN_PROGRESS:
+    if not exam.is_active:
+        # Permit finalizing responses if candidate was already taking the assessment
+        can_finalize_closed = sub_record and (
+            sub_record.status == SubmissionStatus.IN_PROGRESS
+            or (sub_record.status == SubmissionStatus.PENDING_EVALUATION and len(sub_record.answers) == 0)
+        )
+        if not can_finalize_closed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This examination has been closed by the instructor. New submissions are no longer accepted."
+            )
+
+    if sub_record and sub_record.status not in (SubmissionStatus.IN_PROGRESS, SubmissionStatus.PENDING_EVALUATION):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This examination has already been submitted and cannot be resubmitted."

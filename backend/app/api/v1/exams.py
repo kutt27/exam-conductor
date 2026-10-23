@@ -163,6 +163,26 @@ async def toggle_exam_status(
         raise HTTPException(status_code=404, detail="Exam not found or access denied.")
     
     exam.is_active = not exam.is_active
+    
+    # If concluding/ending assessment early, auto-finalize all IN_PROGRESS student submissions
+    if not exam.is_active:
+        from datetime import datetime, timezone
+        from app.models.submission import Submission, SubmissionStatus
+        pending_res = await db.execute(
+            select(Submission).options(selectinload(Submission.answers)).where(
+                Submission.exam_id == exam.id,
+                Submission.status == SubmissionStatus.IN_PROGRESS
+            )
+        )
+        pending_subs = pending_res.scalars().all()
+        now_utc = datetime.now(timezone.utc)
+        for sub in pending_subs:
+            sub.status = SubmissionStatus.PENDING_EVALUATION
+            sub.submitted_at = now_utc
+            if sub.total_score is None:
+                # Sum any auto-evaluated MCQs if answers were already stored
+                sub.total_score = round(sum(ans.auto_score or 0.0 for ans in sub.answers), 2)
+
     await db.commit()
     await db.refresh(exam)
     return exam
